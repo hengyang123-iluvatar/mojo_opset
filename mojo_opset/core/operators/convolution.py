@@ -34,7 +34,11 @@ class MojoCausalConv1dUpdateState(MojoOperator):
         state_len = conv_state.shape[-1]
         hidden_states_new = torch.cat([conv_state, hidden_states], dim=-1).to(weight.dtype)
         conv_state.copy_(hidden_states_new[:, :, -state_len:])
-        out = F.conv1d(hidden_states_new, weight.unsqueeze(1), bias, padding=0, groups=hidden_size)
+        # Iluvatar's cuDNN rejects every depthwise conv1d (any group count), so the
+        # reference has to take torch's native path. This is a correctness baseline,
+        # not a throughput path, so losing the cuDNN algorithm costs nothing.
+        with torch.backends.cudnn.flags(enabled=False):
+            out = F.conv1d(hidden_states_new, weight.unsqueeze(1), bias, padding=0, groups=hidden_size)
         out = out[:, :, -seq_len:]
         if activation in ["silu", "swish"]:
             out = F.silu(out)

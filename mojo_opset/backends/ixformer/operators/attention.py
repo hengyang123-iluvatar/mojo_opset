@@ -895,7 +895,10 @@ class IxformerPagedDecodeGQA(MojoPagedDecodeGQA):
         """
         assert_paged_decode_contract(block_tables, total_seq_lens)
 
-        if bool((total_seq_lens <= 0).any().item()):
+        # Reading total_seq_lens on the host would sync the stream, which is illegal
+        # while a CUDA graph is being captured. Callers capture only shapes they have
+        # already run eagerly, so the eager pass is what enforces this contract.
+        if not torch.cuda.is_current_stream_capturing() and bool((total_seq_lens <= 0).any().item()):
             raise NotImplementedError(
                 "IxformerPagedDecodeGQA does not support batch rows with zero KV length (PADSEQ)."
             )
@@ -1071,7 +1074,10 @@ class IxformerPagedDecodeSWA(MojoPagedDecodeSWA):
         """
         assert_paged_decode_contract(block_table, total_seq_lens)
 
-        if bool((total_seq_lens <= 0).any().item()):
+        # Reading total_seq_lens on the host would sync the stream, which is illegal
+        # while a CUDA graph is being captured. Callers capture only shapes they have
+        # already run eagerly, so the eager pass is what enforces this contract.
+        if not torch.cuda.is_current_stream_capturing() and bool((total_seq_lens <= 0).any().item()):
             raise NotImplementedError(
                 "IxformerPagedDecodeSWA does not support batch rows with zero KV length (PADSEQ)."
             )
